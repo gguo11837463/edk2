@@ -472,7 +472,7 @@ ConvertCbmemToHob (
   SERIAL_PORT_INFO                    SerialPortInfo;
   UNIVERSAL_PAYLOAD_SERIAL_PORT_INFO  *UniversalSerialPort;
 
-  MemBase = PcdGet32 (PcdPayloadFdMemBase);
+  MemBase    = PcdGet32 (PcdPayloadFdMemBase);
   HobMemBase = ALIGN_VALUE (MemBase + SHIMLAYER_SIZE, SIZE_1MB);
   HobMemTop  = HobMemBase + SHIMLAYER_REGION;
   HobConstructor ((VOID *)MemBase, (VOID *)HobMemTop, (VOID *)HobMemBase, (VOID *)HobMemTop);
@@ -602,17 +602,17 @@ LoadPayload (
   OUT    PHYSICAL_ADDRESS      *UniversalPayloadEntry
   )
 {
-  EFI_STATUS                     Status;
-  UINT32                         Index;
-  UINT16                         ExtraDataIndex;
-  CHAR8                          *SectionName;
-  UINTN                          Offset;
-  UINTN                          Size;
-  UINTN                          Length;
-  UINT32                         ExtraDataCount;
-  ELF_IMAGE_CONTEXT              Context;
-  UNIVERSAL_PAYLOAD_EXTRA_DATA   *ExtraData;
-  VOID                           *Dest;
+  EFI_STATUS                    Status;
+  UINT32                        Index;
+  UINT16                        ExtraDataIndex;
+  CHAR8                         *SectionName;
+  UINTN                         Offset;
+  UINTN                         Size;
+  UINTN                         Length;
+  UINT32                        ExtraDataCount;
+  ELF_IMAGE_CONTEXT             Context;
+  UNIVERSAL_PAYLOAD_EXTRA_DATA  *ExtraData;
+  VOID                          *Dest;
 
   Status = LocateAndDecompressPayload (&Dest);
   if (EFI_ERROR (Status)) {
@@ -711,7 +711,7 @@ HandOffToPayload (
   IN     EFI_PEI_HOB_POINTERS  Hob
   )
 {
-  UINTN       HobList;
+  UINTN  HobList;
 
   HobList = (UINTN)(VOID *)Hob.Raw;
   typedef VOID (EFIAPI *PayloadEntry)(UINTN);
