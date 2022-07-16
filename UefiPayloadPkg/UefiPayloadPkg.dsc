@@ -522,6 +522,14 @@
 ################################################################################
 
 !if "IA32" in "$(ARCH)"
+  !if $(BOOTLOADER) == "COREBOOT"
+  [PcdsFixedAtBuild]
+    gUefiPayloadPkgTokenSpaceGuid.PcdLinuxCommandLine|L"loglevel=7 earlyprintk=serial,ttyS0,115200 console=ttyS0,115200 disable_mtrr_cleanup"
+    gUefiPayloadPkgTokenSpaceGuid.PcdPayloadFdMemBase|0x00800000
+    gUefiPayloadPkgTokenSpaceGuid.PcdPayloadFdMemSize|0x00100000
+    gUefiPayloadPkgTokenSpaceGuid.PcdSystemMemoryUefiRegionSize|0x04000000
+  !endif
+
   [Components.IA32]
   !if $(BOOTLOADER) == "COREBOOT"
     UefiPayloadPkg/ShimLayer/ShimLayer.inf

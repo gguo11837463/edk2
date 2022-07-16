@@ -115,10 +115,10 @@ ParseCbmemInfo (
       } else {
         /* Try to locate small root table and find the target CBMEM entry in small root table */
         Status        = FindCbMemTable (CbMemLgRoot, CBMEM_ID_IMD_SMALL, &CbMemSmRootTable, &SmRootTableSize);
-        SmRootPointer = (struct imd_root_pointer *)(UINTN)((UINTN)CbMemSmRootTable + SmRootTableSize - sizeof (struct imd_root_pointer));
-        CbMemSmRoot   = (struct cbmem_root *)(UINTN)(SmRootPointer->root_offset + (UINTN)SmRootPointer);
+        SmRootPointer = (struct imd_root_pointer *)(UINTN)((UINTN) CbMemSmRootTable + SmRootTableSize - sizeof (struct imd_root_pointer));
+        CbMemSmRoot   = (struct cbmem_root *)(UINTN)(SmRootPointer->root_offset + (UINTN) SmRootPointer);
         if (!EFI_ERROR (Status)) {
-          Status = FindCbMemTable ((struct cbmem_root *)CbMemSmRoot, TableId, MemTable, MemTableSize);
+          Status = FindCbMemTable ((struct cbmem_root *) CbMemSmRoot, TableId, MemTable, MemTableSize);
           if (!EFI_ERROR (Status)) {
             break;
           }
@@ -324,7 +324,7 @@ MemInfoCallbackMmio (
 
 
 /**
-  Parse Fsp IIO_UDS to generate PciRootBridge Hob
+  Parse and handle the misc info provided by bootloader
 
   @retval RETURN_SUCCESS           The misc information was parsed successfully.
   @retval RETURN_NOT_FOUND         Could not find required misc info.
@@ -334,7 +334,8 @@ MemInfoCallbackMmio (
 RETURN_STATUS
 EFIAPI
 ParseRootBridgeInfo (
-  OUT UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGES  *PciRootBridgeInfo
+  OUT UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGE   *PciRootBridge,
+  OUT UINT32                              *PciRootBridgeCount
   )
 {
   EFI_STATUS         Status;
@@ -345,8 +346,9 @@ ParseRootBridgeInfo (
   EFI_GUID           UniversalDataGuid = IIO_UNIVERSAL_DATA_GUID;
   UINT32             Index;
   UINT32             Count = 0;
-  STACK_RES          *StackRes;
+  UDS_STACK_RES      *StackRes;
   UINT32             IIONum;
+  UINT32             PciRootIndex;
 
   Status = ParseCbmemInfo (CBMEM_ID_FSP_RUNTIME, (VOID *)&FspHobListAddr, &HobLength);
   DEBUG ((DEBUG_INFO, "Find FspHosList at 0x%x\n", *FspHobListAddr));
@@ -359,57 +361,56 @@ ParseRootBridgeInfo (
     for (IIONum = 0; IIONum <= IioUdsHob->PlatformData.numofIIO; IIONum++) {
       for (Index = 0; Index < MAX_LOGIC_IIO_STACK; Index++) {
         StackRes = &IioUdsHob->PlatformData.IIO_resource[IIONum].StackRes[Index];
-        if (StackRes->BusBase <= StackRes->BusLimit) {
-          PciRootBridgeInfo->RootBridge[Count].Segment = IioUdsHob->PlatformData.CpuQpiInfo[IIONum].PcieSegment;
-          PciRootBridgeInfo->RootBridge[Count].Supports = EFI_PCI_ATTRIBUTE_IDE_PRIMARY_IO |
-            EFI_PCI_ATTRIBUTE_IDE_SECONDARY_IO  |
-            EFI_PCI_ATTRIBUTE_ISA_IO_16         |
-            EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO_16 |
-            EFI_PCI_ATTRIBUTE_VGA_MEMORY        |
-            EFI_PCI_ATTRIBUTE_VGA_IO_16;
-          PciRootBridgeInfo->RootBridge[Count].Attributes = 0;
-          PciRootBridgeInfo->RootBridge[Count].DmaAbove4G =FALSE;
-          PciRootBridgeInfo->RootBridge[Count].NoExtendedConfigSpace = FALSE;
-          PciRootBridgeInfo->RootBridge[Count].AllocationAttributes = EFI_PCI_HOST_BRIDGE_COMBINE_MEM_PMEM |
-            EFI_PCI_HOST_BRIDGE_MEM64_DECODE;
+        // Payload only needs to handle the TYPE_IIO type stack info
+        if ((StackRes->BusBase <= StackRes->BusLimit) && (StackRes->Personality == TYPE_IIO)) {
 
-          PciRootBridgeInfo->RootBridge[Count].Bus.Base = StackRes->BusBase;
-          PciRootBridgeInfo->RootBridge[Count].Bus.Limit = StackRes->BusLimit;
-          PciRootBridgeInfo->RootBridge[Count].Bus.Translation = 0;
-
-          PciRootBridgeInfo->RootBridge[Count].Io.Base = StackRes->PciResourceIoBase;
-          PciRootBridgeInfo->RootBridge[Count].Io.Limit = StackRes->PciResourceIoLimit;
-          PciRootBridgeInfo->RootBridge[Count].Io.Translation = 0;
-
-          PciRootBridgeInfo->RootBridge[Count].Mem.Base = StackRes->PciResourceMem32Base;
-          PciRootBridgeInfo->RootBridge[Count].Mem.Limit = StackRes->PciResourceMem32Limit;
-          PciRootBridgeInfo->RootBridge[Count].Mem.Translation = 0;
-
-          PciRootBridgeInfo->RootBridge[Count].MemAbove4G.Base = StackRes->PciResourceMem64Base;
-          PciRootBridgeInfo->RootBridge[Count].MemAbove4G.Limit = StackRes->PciResourceMem64Limit;
-          PciRootBridgeInfo->RootBridge[Count].MemAbove4G.Translation = 0;
-
-          PciRootBridgeInfo->RootBridge[Count].PMem.Base = 0xFFFFFFFFFFFFFFFF;
-          PciRootBridgeInfo->RootBridge[Count].PMem.Limit = 0;
-          PciRootBridgeInfo->RootBridge[Count].PMem.Translation = 0;
-
-          PciRootBridgeInfo->RootBridge[Count].PMemAbove4G.Base = 0xFFFFFFFFFFFFFFFF;
-          PciRootBridgeInfo->RootBridge[Count].PMemAbove4G.Limit = 0;
-          PciRootBridgeInfo->RootBridge[Count].PMemAbove4G.Translation = 0;
-
-          PciRootBridgeInfo->RootBridge[Count].HID = EISA_PNP_ID(0x0A03);
-          PciRootBridgeInfo->RootBridge[Count].UID = Count;
-          Count++;
+          for (PciRootIndex = 0; PciRootIndex < MAX_IIO_PCIROOTS_PER_STACK; PciRootIndex++) {
+            if (StackRes->PciRoot[PciRootIndex].BusBase != StackRes->BusBase) {
+              continue;
+            }
+            DEBUG ((DEBUG_INFO, "============================================================================\n"));
+            DEBUG ((DEBUG_INFO, "StackRes->PciRoot[PciRootIndex].BusBase    : %x\n",  StackRes->PciRoot[PciRootIndex].BusBase));
+            DEBUG ((DEBUG_INFO, "StackRes->PciRoot[PciRootIndex].BusLimit   : %x\n",  StackRes->PciRoot[PciRootIndex].BusLimit));
+            DEBUG ((DEBUG_INFO, "StackRes->PciRoot[PciRootIndex].IoBase     : %x\n",  StackRes->PciRoot[PciRootIndex].IoBase));
+            DEBUG ((DEBUG_INFO, "StackRes->PciRoot[PciRootIndex].IoLimit    : %x\n",  StackRes->PciRoot[PciRootIndex].IoLimit));
+            DEBUG ((DEBUG_INFO, "StackRes->PciRoot[PciRootIndex].Mmio32Base : %x\n",  StackRes->PciRoot[PciRootIndex].Mmio32Base));
+            DEBUG ((DEBUG_INFO, "StackRes->PciRoot[PciRootIndex].Mmio32Limit: %x\n",  StackRes->PciRoot[PciRootIndex].Mmio32Limit));
+            DEBUG ((DEBUG_INFO, "StackRes->PciRoot[PciRootIndex].Mmio64Base : %x\n",  StackRes->PciRoot[PciRootIndex].Mmio64Base));
+            DEBUG ((DEBUG_INFO, "StackRes->PciRoot[PciRootIndex].Mmio64Limit: %x\n",  StackRes->PciRoot[PciRootIndex].Mmio64Limit));
+            PciRootBridge[Count].Segment                 = IioUdsHob->PlatformData.CpuQpiInfo[IIONum].PcieSegment;
+            PciRootBridge[Count].Supports                = EFI_PCI_ATTRIBUTE_IDE_PRIMARY_IO | EFI_PCI_ATTRIBUTE_IDE_SECONDARY_IO | EFI_PCI_ATTRIBUTE_ISA_IO_16 | EFI_PCI_ATTRIBUTE_VGA_PALETTE_IO_16 | EFI_PCI_ATTRIBUTE_VGA_MEMORY | EFI_PCI_ATTRIBUTE_VGA_IO_16;
+            PciRootBridge[Count].Attributes              = 0;
+            PciRootBridge[Count].DmaAbove4G              = FALSE;
+            PciRootBridge[Count].NoExtendedConfigSpace   = FALSE;
+            PciRootBridge[Count].AllocationAttributes    = EFI_PCI_HOST_BRIDGE_COMBINE_MEM_PMEM | EFI_PCI_HOST_BRIDGE_MEM64_DECODE;
+            PciRootBridge[Count].Bus.Base                = StackRes->PciRoot[PciRootIndex].BusBase;
+            PciRootBridge[Count].Bus.Limit               = StackRes->PciRoot[PciRootIndex].BusLimit;
+            PciRootBridge[Count].Bus.Translation         = 0;
+            PciRootBridge[Count].Io.Base                 = StackRes->PciRoot[PciRootIndex].IoBase;
+            PciRootBridge[Count].Io.Limit                = StackRes->PciRoot[PciRootIndex].IoLimit;
+            PciRootBridge[Count].Io.Translation          = 0;
+            PciRootBridge[Count].Mem.Base                = StackRes->PciRoot[PciRootIndex].Mmio32Base;
+            PciRootBridge[Count].Mem.Limit               = StackRes->PciRoot[PciRootIndex].Mmio32Limit;
+            PciRootBridge[Count].Mem.Translation         = 0;
+            PciRootBridge[Count].MemAbove4G.Base         = StackRes->PciRoot[PciRootIndex].Mmio64Base;
+            PciRootBridge[Count].MemAbove4G.Limit        = StackRes->PciRoot[PciRootIndex].Mmio64Limit;
+            PciRootBridge[Count].MemAbove4G.Translation  = 0;
+            PciRootBridge[Count].PMem.Base               = 0xFFFFFFFFFFFFFFFF;
+            PciRootBridge[Count].PMem.Limit              = 0;
+            PciRootBridge[Count].PMem.Translation        = 0;
+            PciRootBridge[Count].PMemAbove4G.Base        = 0xFFFFFFFFFFFFFFFF;
+            PciRootBridge[Count].PMemAbove4G.Limit       = 0;
+            PciRootBridge[Count].PMemAbove4G.Translation = 0;
+            PciRootBridge[Count].HID                     = EISA_PNP_ID(0x0A03);
+            PciRootBridge[Count].UID                     = Count;
+            Count++;
+          }
         }
       }
     }
-    
-    PciRootBridgeInfo->Count = Count;
-    PciRootBridgeInfo->Header.Length = sizeof (UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGES) + PciRootBridgeInfo->Count * sizeof (UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGE);
-    PciRootBridgeInfo->Header.Revision = UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGES_REVISION;
-    PciRootBridgeInfo->ResourceAssigned = TRUE;
-
   }
+  *PciRootBridgeCount = Count;
+
   return RETURN_SUCCESS;
 }
 
@@ -424,14 +425,15 @@ BuildHobFromBl (
   VOID
   )
 {
-  EFI_STATUS                        Status;
-  EFI_PEI_GRAPHICS_INFO_HOB         GfxInfo;
-  EFI_PEI_GRAPHICS_INFO_HOB         *NewGfxInfo;
-  EFI_PEI_GRAPHICS_DEVICE_INFO_HOB  GfxDeviceInfo;
-  EFI_PEI_GRAPHICS_DEVICE_INFO_HOB  *NewGfxDeviceInfo;
-  UNIVERSAL_PAYLOAD_SMBIOS_TABLE    *SmBiosTableHob;
-  UNIVERSAL_PAYLOAD_ACPI_TABLE      *AcpiTableHob;
-  UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGES PciRootBridgeInfo;
+  EFI_STATUS                         Status;
+  EFI_PEI_GRAPHICS_INFO_HOB          GfxInfo;
+  EFI_PEI_GRAPHICS_INFO_HOB          *NewGfxInfo;
+  EFI_PEI_GRAPHICS_DEVICE_INFO_HOB   GfxDeviceInfo;
+  EFI_PEI_GRAPHICS_DEVICE_INFO_HOB   *NewGfxDeviceInfo;
+  UNIVERSAL_PAYLOAD_SMBIOS_TABLE     *SmBiosTableHob;
+  UNIVERSAL_PAYLOAD_ACPI_TABLE       *AcpiTableHob;
+  UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGE  PciRootBridge[84];
+  UINT32                             PciRootBridgeCount;
   UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGES *NewPciRootBridgeInfo;
   UINT32                             Length;
 
@@ -500,13 +502,23 @@ BuildHobFromBl (
     DEBUG ((DEBUG_INFO, "Detected ACPI Table at 0x%lx\n", AcpiTableHob->Rsdp));
   }
 
-  Status = ParseRootBridgeInfo (&PciRootBridgeInfo);
+  //
+  // Creat PciRootBridge Hob
+  //
+  ZeroMem (PciRootBridge, sizeof (PciRootBridge));
+  Status = ParseRootBridgeInfo (&PciRootBridge[0], &PciRootBridgeCount);
   if (!EFI_ERROR (Status)) {
-    Length = sizeof(UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGES) + PciRootBridgeInfo.Count * sizeof(UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGE);
-    NewPciRootBridgeInfo = BuildGuidHob (&gUniversalPayloadPciRootBridgeInfoGuid, Length);
+    Length = PciRootBridgeCount * sizeof(UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGE);
+    NewPciRootBridgeInfo = BuildGuidHob (&gUniversalPayloadPciRootBridgeInfoGuid, sizeof (UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGES) + Length);
     ASSERT (NewPciRootBridgeInfo != NULL);
-    CopyMem (NewPciRootBridgeInfo, &PciRootBridgeInfo, Length);
-    DEBUG ((DEBUG_INFO, "Created PCI root bridg info hob\n"));
+
+    NewPciRootBridgeInfo->Count = PciRootBridgeCount;
+    NewPciRootBridgeInfo->Header.Length    = sizeof (UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGES) + Length;
+    NewPciRootBridgeInfo->Header.Revision  = UNIVERSAL_PAYLOAD_PCI_ROOT_BRIDGES_REVISION;
+    NewPciRootBridgeInfo->ResourceAssigned = TRUE;
+
+    CopyMem (&(NewPciRootBridgeInfo->RootBridge[0]), &PciRootBridge, Length);
+    DEBUG ((DEBUG_INFO, "Created PCI root bridge info hob\n"));
   }
   //
   // Parse memory info and build memory HOBs for reserved DRAM and MMIO
@@ -533,8 +545,8 @@ BuildGenericHob (
   UINT8                        PhysicalAddressBits;
   EFI_RESOURCE_ATTRIBUTE_TYPE  ResourceAttribute;
 
-  // Memory allocaion hob for the Shim Layer
-  BuildMemoryAllocationHob (PcdGet32 (PcdPayloadFdMemBase), SHIMLAYER_SIZE, EfiBootServicesData);
+  //Memory allocation hob for the Shim Layer
+  BuildMemoryAllocationHob (PcdGet32 (PcdPayloadFdMemBase), PcdGet32 (PcdPayloadFdMemSize), EfiBootServicesData);
 
   //
   // Build CPU memory space and IO space hob
@@ -575,8 +587,8 @@ ConvertCbmemToHob (
   UNIVERSAL_PAYLOAD_SERIAL_PORT_INFO  *UniversalSerialPort;
 
   MemBase    = PcdGet32 (PcdPayloadFdMemBase);
-  HobMemBase = ALIGN_VALUE (MemBase + SHIMLAYER_SIZE, SIZE_1MB);
-  HobMemTop  = HobMemBase + SHIMLAYER_REGION;
+  HobMemBase = ALIGN_VALUE (MemBase + PcdGet32 (PcdPayloadFdMemSize), SIZE_1MB);
+  HobMemTop  = HobMemBase + PcdGet32 (PcdSystemMemoryUefiRegionSize);
   HobConstructor ((VOID *)MemBase, (VOID *)HobMemTop, (VOID *)HobMemBase, (VOID *)HobMemTop);
 
   Status = ParseSerialInfo (&SerialPortInfo);
@@ -605,23 +617,26 @@ ConvertCbmemToHob (
 
 EFI_STATUS
 LocateAndDecompressPayload (
-  OUT VOID  **Dest
+  OUT VOID **Dest
   )
 {
-  EFI_STATUS                   Status;
-  PHYSICAL_ADDRESS             SourceAddress;
-  UINT64                       ImageSize;
-  PHYSICAL_ADDRESS             CBFSAddress;
-  VOID                         *FMapEntry;
-  UINT32                       FMapEntrySize;
-  struct fmap_area             *FMapArea;
-  VOID                         *MCacheEntryBase;
-  union mcache_entry           *MCacheEntry;
-  UINT32                       MCacheEntrySize;
-  struct cbfs_payload_segment  *FirstSegment;
-  UINT32                       Index;
-  UINTN                        DestSize, ScratchSize;
-  VOID                         *MyDestAddress, *ScratchAddress;
+  EFI_STATUS                  Status;
+  PHYSICAL_ADDRESS            SourceAddress;
+  UINT64                      ImageSize;
+  PHYSICAL_ADDRESS            CBFSAddress;
+  VOID                        *FMapEntry;
+  UINT32                      FMapEntrySize;
+  struct fmap_area            *FMapArea;
+  VOID                        *MCacheEntryBase;
+  union mcache_entry          *MCacheEntry;
+  UINT32                      MCacheEntrySize;
+  struct cbfs_payload_segment *FirstSegment;
+  UINT32                      Index;
+  UINTN                       DestSize;
+  UINTN                       ScratchSize;
+  VOID                        *MyDestAddress;
+  VOID                        *ScratchAddress;
+  UINT32                      Alignment;
 
   SourceAddress = 0;
   CBFSAddress   = 0;
@@ -630,19 +645,16 @@ LocateAndDecompressPayload (
   if (EFI_ERROR (Status)) {
     return EFI_NOT_FOUND;
   }
-
   /*Locate fmap from CBMEM*/
   FMapArea = (struct fmap_area *)((UINTN)FMapEntry + sizeof (struct fmap));
   for (Index = 0; Index < ((struct fmap *)FMapEntry)->nareas; Index++) {
     DEBUG ((DEBUG_INFO, "Coreboot fmap is %a\n", (CONST CHAR8 *)FMapArea->name));
-    if (AsciiStrCmp ((CONST CHAR8 *)FMapArea->name, "COREBOOT") == 0) {
+    if (AsciiStrCmp ((CONST CHAR8 *)FMapArea->name, "COREBOOT") == 0){
       CBFSAddress = ((struct fmap *)FMapEntry)->base + FMapArea->offset;
       break;
     }
-
     FMapArea = (struct fmap_area *)((UINTN)FMapArea + sizeof (struct fmap_area));
   }
-
   if (!CBFSAddress) {
     return EFI_NOT_FOUND;
   }
@@ -652,75 +664,74 @@ LocateAndDecompressPayload (
   if (EFI_ERROR (Status)) {
     return EFI_NOT_FOUND;
   }
-
   MCacheEntry = (union mcache_entry *)MCacheEntryBase;
-  while (((UINTN)MCacheEntry + CBFS_MCACHE_ALIGNMENT) <= ((UINTN)MCacheEntryBase + MCacheEntrySize)) {
+  while(((UINTN)MCacheEntry + CBFS_MCACHE_ALIGNMENT) <= ((UINTN)MCacheEntryBase + MCacheEntrySize)) {
     if (MCacheEntry->magic == MCACHE_MAGIC_FILE) {
       if (AsciiStrCmp (MCacheEntry->file.h.filename, CBFS_UNIVERSAL_PAYLOAD) == 0) {
-        FirstSegment  = &((struct cbfs_payload *)(UINTN)(CBFSAddress + MCacheEntry->offset + SWAP32 (MCacheEntry->file.h.offset)))->segments;
-        SourceAddress = (UINTN)FirstSegment + SWAP32 (FirstSegment->offset);
-        ImageSize     = SWAP32 (FirstSegment->len);
-        ASSERT (SWAP32 (FirstSegment->type)       == PAYLOAD_SEGMENT_CODE);
-        ASSERT (SWAP32 ((FirstSegment + 1)->type) == PAYLOAD_SEGMENT_ENTRY);
+        FirstSegment  = &((struct cbfs_payload *)(UINTN)(CBFSAddress + MCacheEntry->offset + SWAP32(MCacheEntry->file.h.offset)))->segments;
+        SourceAddress = (UINTN)FirstSegment + SWAP32(FirstSegment->offset);
+        ImageSize     = SWAP32(FirstSegment->len);
+        Alignment     = (FirstSegment->load_addr)>>32;
+        Alignment     = SWAP32(Alignment);
+        ASSERT (SWAP32(FirstSegment->type)       == PAYLOAD_SEGMENT_CODE);
+        ASSERT (SWAP32((FirstSegment + 1)->type) == PAYLOAD_SEGMENT_ENTRY);
+        DEBUG ((DEBUG_INFO, "The alignment is 0x%x\n", Alignment));
         break;
       }
     }
-
-    MCacheEntry = (union mcache_entry *)((UINTN)MCacheEntry + ALIGN_UP (SWAP32 (MCacheEntry->file.h.offset), CBFS_MCACHE_ALIGNMENT));
+    MCacheEntry = (union mcache_entry *)((UINTN)MCacheEntry + ALIGN_UP(SWAP32(MCacheEntry->file.h.offset), CBFS_MCACHE_ALIGNMENT));
   }
-
   if (!SourceAddress) {
     return EFI_NOT_FOUND;
   }
-
   DEBUG ((DEBUG_INFO, "Locate Payload at 0x%x\n", SourceAddress));
 
-  Status = LzmaUefiDecompressGetInfo ((VOID *)(UINTN)SourceAddress, ImageSize, &DestSize, &ScratchSize);
+  Status = LzmaUefiDecompressGetInfo((VOID *)(UINTN)SourceAddress, ImageSize, &DestSize, &ScratchSize);
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "Error when getting info from Decompressed Payload, Status = %r\n", Status));
     return Status;
   }
-
+  DestSize += Alignment;
   DEBUG ((DEBUG_INFO, "DestSize , ScratchSize 0x%x 0x%x\n", DestSize, ScratchSize));
-  MyDestAddress  = AllocatePages (EFI_SIZE_TO_PAGES (DestSize));
-  ScratchAddress = AllocatePages (EFI_SIZE_TO_PAGES (ScratchSize));
+  MyDestAddress  = AllocatePages(EFI_SIZE_TO_PAGES(DestSize));
+  MyDestAddress  = (VOID *) ALIGN_VALUE ((UINTN) MyDestAddress, Alignment);
+  ScratchAddress = AllocatePages(EFI_SIZE_TO_PAGES(ScratchSize));
   DEBUG ((DEBUG_INFO, "MyDestAddress , ScratchAddress 0x%x 0x%x\n", (UINTN)MyDestAddress, (UINTN)ScratchAddress));
 
   Status = LzmaUefiDecompress ((VOID *)(UINTN)SourceAddress, ImageSize, MyDestAddress, ScratchAddress);
-  *Dest  = MyDestAddress;
+  *Dest = MyDestAddress;
   DEBUG ((DEBUG_INFO, "Decompress Payload to 0x%x\n", *Dest));
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "Error when Decompressing Payload, Status = %r\n", Status));
     return Status;
   }
-
   return EFI_SUCCESS;
+
 }
 
 EFI_STATUS
 LoadPayload (
-  OUT    EFI_PHYSICAL_ADDRESS  *ImageAddressArg   OPTIONAL,
-  OUT    UINT64                *ImageSizeArg,
-  OUT    PHYSICAL_ADDRESS      *UniversalPayloadEntry
+  OUT    EFI_PHYSICAL_ADDRESS    *ImageAddressArg   OPTIONAL,
+  OUT    UINT64                  *ImageSizeArg,
+  OUT    PHYSICAL_ADDRESS        *UniversalPayloadEntry
   )
 {
-  EFI_STATUS                    Status;
-  UINT32                        Index;
-  UINT16                        ExtraDataIndex;
-  CHAR8                         *SectionName;
-  UINTN                         Offset;
-  UINTN                         Size;
-  UINTN                         Length;
-  UINT32                        ExtraDataCount;
-  ELF_IMAGE_CONTEXT             Context;
-  UNIVERSAL_PAYLOAD_EXTRA_DATA  *ExtraData;
-  VOID                          *Dest;
+  EFI_STATUS                     Status;
+  UINT32                         Index;
+  UINT16                         ExtraDataIndex;
+  CHAR8                          *SectionName;
+  UINTN                          Offset;
+  UINTN                          Size;
+  UINTN                          Length;
+  UINT32                         ExtraDataCount;
+  ELF_IMAGE_CONTEXT              Context;
+  UNIVERSAL_PAYLOAD_EXTRA_DATA   *ExtraData;
+  VOID *Dest;
 
   Status = LocateAndDecompressPayload (&Dest);
   if (EFI_ERROR (Status)) {
     return Status;
   }
-
   Status = ParseElfImage (Dest, &Context);
   if (EFI_ERROR (Status)) {
     return Status;
@@ -737,6 +748,7 @@ LoadPayload (
   //
   // Get UNIVERSAL_PAYLOAD_INFO_HEADER and number of additional PLD sections.
   //
+
   ExtraDataCount = 0;
   for (Index = 0; Index < Context.ShNum; Index++) {
     Status = GetElfSectionName (&Context, Index, &SectionName);
@@ -787,37 +799,34 @@ LoadPayload (
       }
     }
   }
-
   if (Context.ReloadRequired || (Context.PreferredImageAddress != Context.FileBase)) {
     Context.ImageAddress = AllocatePages (EFI_SIZE_TO_PAGES (Context.ImageSize));
   } else {
     Context.ImageAddress = Context.FileBase;
   }
-
   //
   // Load ELF into the required base
   //
   Status = LoadElfImage (&Context);
   if (!EFI_ERROR (Status)) {
-    *ImageAddressArg       = (UINTN)Context.ImageAddress;
-    *UniversalPayloadEntry = Context.EntryPoint;
-    *ImageSizeArg          = Context.ImageSize;
+    *ImageAddressArg        = (UINTN)Context.ImageAddress;
+    *UniversalPayloadEntry  = Context.EntryPoint;
+    *ImageSizeArg           = Context.ImageSize;
   }
-
   return Status;
 }
 
 EFI_STATUS
 HandOffToPayload (
-  IN     PHYSICAL_ADDRESS      UniversalPayloadEntry,
-  IN     EFI_PEI_HOB_POINTERS  Hob
+  IN     PHYSICAL_ADDRESS        UniversalPayloadEntry,
+  IN     EFI_PEI_HOB_POINTERS    Hob
   )
 {
-  UINTN  HobList;
+  UINTN       HobList;
 
   HobList = (UINTN)(VOID *)Hob.Raw;
-  typedef VOID (EFIAPI *PayloadEntry)(UINTN);
-  ((PayloadEntry)(UINTN)UniversalPayloadEntry)(HobList);
+  typedef VOID (EFIAPI *PayloadEntry) (UINTN);
+  ((PayloadEntry) (UINTN) UniversalPayloadEntry) (HobList);
 
   CpuDeadLoop ();
   return EFI_SUCCESS;
@@ -835,19 +844,19 @@ HandOffToPayload (
 EFI_STATUS
 EFIAPI
 _ModuleEntryPoint (
-  IN UINTN  BootloaderParameter
+  IN UINTN                      BootloaderParameter
   )
 {
-  EFI_STATUS            Status;
-  EFI_PEI_HOB_POINTERS  Hob;
-  PHYSICAL_ADDRESS      ImageAddress;
-  UINT64                ImageSize;
-  PHYSICAL_ADDRESS      UniversalPayloadEntry;
+  EFI_STATUS              Status;
+  EFI_PEI_HOB_POINTERS    Hob;
+  PHYSICAL_ADDRESS        ImageAddress;
+  UINT64                  ImageSize;
+  PHYSICAL_ADDRESS        UniversalPayloadEntry;
 
   Status = PcdSet64S (PcdBootloaderParameter, BootloaderParameter);
   ASSERT_EFI_ERROR (Status);
 
-  Status = ConvertCbmemToHob ();
+  Status = ConvertCbmemToHob();
   if (EFI_ERROR (Status)) {
     DEBUG ((DEBUG_ERROR, "ConvertCbmemToHob Status = %r\n", Status));
     return Status;

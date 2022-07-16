@@ -38,8 +38,6 @@
   IoLib
   BlParseLib
   HobLib
-  PeCoffLib
-  PlatformSupportLib
   UefiCpuLib
   LzmaDecompressLib
   ElfLoaderLib
@@ -52,11 +50,14 @@
   gUniversalPayloadSerialPortInfoGuid
   gUniversalPayloadExtraDataGuid
   gUniversalPayloadPciRootBridgeInfoGuid
+  gUefiPayloadPkgTokenSpaceGuid
 
-
-[Pcd.IA32,Pcd.X64]
+[Pcd]
   gUefiPayloadPkgTokenSpaceGuid.PcdPayloadFdMemBase
+  gUefiPayloadPkgTokenSpaceGuid.PcdPayloadFdMemSize
   gUefiPayloadPkgTokenSpaceGuid.PcdBootloaderParameter
+  gUefiPayloadPkgTokenSpaceGuid.PcdSystemMemoryUefiRegionSize
+  gUefiPayloadPkgTokenSpaceGuid.PcdLinuxCommandLine
 
 [BuildOptions]
   GCC:*_CLANGDWARF_*_DLINK2_FLAGS == -Wl,--defsym=PECOFF_HEADER_SIZE=0x800000 -Wl,--script=$(EDK_TOOLS_PATH)/Scripts/ClangBase.lds -O3 -fuse-ld=lld
