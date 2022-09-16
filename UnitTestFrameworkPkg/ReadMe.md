@@ -60,7 +60,7 @@ you should be good to go.
 
 See this example in 'SampleUnitTestUefiShell.inf'...
 
-```
+```inf
 [Packages]
   MdePkg/MdePkg.dec
 
@@ -75,7 +75,7 @@ See this example in 'SampleUnitTestUefiShell.inf'...
 Also, if you want you test to automatically be picked up by the Test Runner plugin, you will need
 to make sure that the module `BASE_NAME` contains the word `Test`...
 
-```
+```inf
 [Defines]
   BASE_NAME      = SampleUnitTestUefiShell
 ```
@@ -361,7 +361,7 @@ RUNNING TEST SUITE: Int Safe Conversions Test Suite
 ```
 
 You can also, if you are so inclined, read the output from the exact instance of the test that was run during
-`stuart_ci_build`. The ouput file can be found on a path that looks like:
+`stuart_ci_build`. The output file can be found on a path that looks like:
 
 `Build/<Package>/HostTest/<Arch>/<TestName>.<TestSuiteName>.<Arch>.result.xml`
 
@@ -398,6 +398,42 @@ CMOCKA_XML_FILE=<absolute or relative path to output file>
 ```
 
 This mode is used by the test running plugin to aggregate the results for CI test status reporting in the web view.
+
+### Code Coverage
+
+Host based Unit Tests will automatically i enable coverage data.
+This is primarily leveraged for pipeline builds, but this can be leveraged locally using the
+lcov linux tool, and parsed using the lcov_cobertura python tool. pycobertura is used to
+covert this coverage data to a human readable HTML file. These tools must be installed
+to parse code coverage.
+
+- Windows Prerequisite
+  ```bash
+  Download and install https://github.com/OpenCppCoverage/OpenCppCoverage/tags
+  pip install pycobertura
+  ```
+
+- Linux Prerequisite
+  ```bash
+  sudo apt-get install -y lcov
+  pip install lcov_cobertura
+  pip install pycobertura
+  ```
+
+During CI builds, use the  ```CODE_COVERAGE=TRUE``` flag to generate the code coverage XML files,
+and additionally use the ```CC_HTML=TRUE``` flag to generate the HTML file. This will be generated
+in Build/coverage.html.
+
+There is currently no official guidance or support for code coverage when compiling
+in Visual Studio at this time.
+During CI builds, use the  ```CODE_COVERAGE=TRUE``` flag to generate the code coverage XML files,
+and additionally use the ```CC_HTML=TRUE``` flag to generate the HTML file. This will be generated
+in Build/coverage.html.
+
+Example
+```bash
+  stuart_ci_build -c .pytool/CISettings.py  -t NOOPT TOOL_CHAIN_TAG=VS2019 -p MdeModulePkg CC_HTML=TRUE CODE_COVERAGE=TRUE
+ ```
 
 ### Important Note
 
