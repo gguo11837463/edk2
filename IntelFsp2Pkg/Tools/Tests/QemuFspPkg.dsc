@@ -461,10 +461,17 @@
 ###################################################################################################
 [BuildOptions]
 # Append build options for EDK and EDKII drivers (= is Append, == is Replace)
-  # Enable link-time optimization when building with GCC49
+  # Enable link-time optimization when building with GCC49 or GCCNOLTO
   *_GCC49_IA32_CC_FLAGS = -flto
   *_GCC49_IA32_DLINK_FLAGS = -flto
+  *_GCCNOLTO_IA32_CC_FLAGS = -flto
+  *_GCCNOLTO_IA32_DLINK_FLAGS = -flto
   *_GCC5_IA32_CC_FLAGS = -fno-pic
   *_GCC5_IA32_DLINK_FLAGS = -no-pie
   *_GCC5_IA32_ASLCC_FLAGS = -fno-pic
   *_GCC5_IA32_ASLDLINK_FLAGS = -no-pie
+  *_GCC_IA32_CC_FLAGS = -fno-pic
+  *_GCC_IA32_DLINK_FLAGS = -no-pie
+  *_GCC_IA32_ASLCC_FLAGS = -fno-pic
+  *_GCC_IA32_ASLDLINK_FLAGS = -no-pie
+
