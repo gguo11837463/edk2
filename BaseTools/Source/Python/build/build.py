@@ -1002,9 +1002,6 @@ class Build():
     #   command line and target.txt, then get the final build configurations.
     #
     def InitBuild(self):
-        # parse target.txt, tools_def.txt, and platform file
-        self.LoadConfiguration()
-
         # Allow case-insensitive for those from command line or configuration file
         ErrorCode, ErrorInfo = self.PlatformFile.Validate(".dsc", False)
         if ErrorCode != 0:
@@ -1012,6 +1009,7 @@ class Build():
 
 
     def InitPreBuild(self):
+        # parse target.txt, tools_def.txt, and platform file
         self.LoadConfiguration()
         ErrorCode, ErrorInfo = self.PlatformFile.Validate(".dsc", False)
         if ErrorCode != 0:
